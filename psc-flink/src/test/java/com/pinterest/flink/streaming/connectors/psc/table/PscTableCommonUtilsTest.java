@@ -362,6 +362,108 @@ public class PscTableCommonUtilsTest {
     }
 
     // ============================================
+    // Tests for getEffectiveSourceParallelism()
+    // Precedence: scan.parallelism > table.exec.resource.default-parallelism > kafka partition count
+    // ============================================
+
+    @Test
+    public void testEffectiveParallelismFromScanParallelism() {
+        // Given: scan.parallelism = 12, others would also resolve but should be ignored
+        globalConfig.set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+        PscTableCommonUtils.setProviderForTest((topicUris, props) -> 7);
+
+        // When
+        int parallelism = PscTableCommonUtils.getEffectiveSourceParallelism(
+            globalConfig, topicUris, pscProperties, 12);
+
+        // Then: scan.parallelism wins
+        assertThat(parallelism).isEqualTo(12);
+    }
+
+    @Test
+    public void testEffectiveParallelismFallsThroughWhenScanParallelismIsNull() {
+        // Given: scan.parallelism not set; table.exec set to 4; partition count = 7
+        globalConfig.set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+        PscTableCommonUtils.setProviderForTest((topicUris, props) -> 7);
+
+        // When
+        int parallelism = PscTableCommonUtils.getEffectiveSourceParallelism(
+            globalConfig, topicUris, pscProperties, null);
+
+        // Then: table.exec wins (4)
+        assertThat(parallelism).isEqualTo(4);
+    }
+
+    @Test
+    public void testEffectiveParallelismFallsThroughWhenScanParallelismIsMinusOne() {
+        // Given: scan.parallelism = -1 (unset sentinel)
+        globalConfig.set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, 4);
+        PscTableCommonUtils.setProviderForTest((topicUris, props) -> 7);
+
+        // When
+        int parallelism = PscTableCommonUtils.getEffectiveSourceParallelism(
+             globalConfig, topicUris, pscProperties, -1);
+
+        // Then: -1 is treated as unset; table.exec wins (4)
+        assertThat(parallelism).isEqualTo(4);
+    }
+
+    @Test
+    public void testEffectiveParallelismFallsThroughToPartitionCount() {
+        // Given: scan.parallelism unset; table.exec = -1; partition count = 7
+        globalConfig.set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, -1);
+        PscTableCommonUtils.setProviderForTest((topicUris, props) -> 7);
+
+        // When
+        int parallelism = PscTableCommonUtils.getEffectiveSourceParallelism(
+             globalConfig, topicUris, pscProperties, null);
+
+        // Then: kafka partition count is used
+        assertThat(parallelism).isEqualTo(7);
+    }
+
+    @Test
+    public void testEffectiveParallelismFallsThroughToPartitionCountWhenTableExecIsUnset() {
+        // Given: scan.parallelism unset; table.exec not configured at all (returns null/default)
+        // Note: globalConfig has no value for TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM
+        PscTableCommonUtils.setProviderForTest((topicUris, props) -> 9);
+
+        // When
+        int parallelism = PscTableCommonUtils.getEffectiveSourceParallelism(
+             globalConfig, topicUris, pscProperties, null);
+
+        // Then: kafka partition count is used
+        assertThat(parallelism).isEqualTo(9);
+    }
+
+    @Test
+    public void testEffectiveParallelismReturnsMinusOneWhenAllSourcesFail() {
+        // Given: scan.parallelism unset; table.exec = -1; partition count provider returns -1
+        globalConfig.set(ExecutionConfigOptions.TABLE_EXEC_RESOURCE_DEFAULT_PARALLELISM, -1);
+        PscTableCommonUtils.setProviderForTest((topicUris, props) -> -1);
+
+        // When
+        int parallelism = PscTableCommonUtils.getEffectiveSourceParallelism(
+             globalConfig, topicUris, pscProperties, null);
+
+        // Then: -1 (unknown)
+        assertThat(parallelism).isEqualTo(-1);
+    }
+
+    @Test
+    public void testEffectiveParallelismReturnsMinusOneWhenPartitionCountIsZero() {
+        // Given: scan.parallelism null; table.exec unset; partition count provider returns 0
+        PscTableCommonUtils.setProviderForTest((topicUris, props) -> 0);
+
+        // When
+        int parallelism = PscTableCommonUtils.getEffectiveSourceParallelism(
+             globalConfig, topicUris, pscProperties, null);
+
+        // Then: 0 is invalid → -1 (unknown)
+        assertThat(parallelism).isEqualTo(-1);
+    }
+
+    // ============================================
     // Tests validating PscMetadataClient configuration fix
     // ============================================
 
