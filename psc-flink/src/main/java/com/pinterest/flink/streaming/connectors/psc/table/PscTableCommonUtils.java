@@ -252,6 +252,8 @@ public class PscTableCommonUtils {
     private PscTableCommonUtils() {
         throw new UnsupportedOperationException("Utility class should not be instantiated");
     }
+    
+    public static int getEffectiveSourceParallelism(){}
 }
 
 
