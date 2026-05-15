@@ -226,17 +226,6 @@ public class PscDynamicSource
     }
 
     /**
-     * Determines the intended downstream parallelism.
-     * Uses scan.parallelism if configured, otherwise falls back to global default.
-     * 
-     * @param execEnv the stream execution environment
-     * @return the intended parallelism for downstream operators
-     */
-    private int getIntendedParallelism(StreamExecutionEnvironment execEnv) {
-        return scanParallelism != null ? scanParallelism : execEnv.getParallelism();
-    }
-
-    /**
      * Backwards-compatible constructor that accepts int[] projections.
      * Converts them to int[][] format internally.
      */
@@ -472,8 +461,6 @@ public class PscDynamicSource
                   LOG.info("Rescale disabled: source will use job default "
                       + "parallelism = {}", execEnv.getParallelism());
                 }
-
-                LOG.info("@@@@>>>enableRescale ::" + enableRescale);
 
                 if (isRateLimitingEnabled(rateLimitRecordsPerSecond)) {
                     String rateLimiterOperatorName = "PscRateLimit-" + tableIdentifier;
